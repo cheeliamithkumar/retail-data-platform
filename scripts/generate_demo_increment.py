@@ -1,21 +1,10 @@
-"""Generate a SYNTHETIC incremental batch to demonstrate incremental loads and rejections.
+"""Make a small SYNTHETIC batch for testing incremental loads and rejections.
 
-THIS DATA IS SYNTHETIC. It is derived from the real Superstore extract in data/raw
-with a fixed random seed (reproducible), and written to ``data/demo_increment/`` so
-the genuine source files are never modified.
-
-The batch contains:
-
-* ``--new`` new order lines (default 200) for January 2019, built by re-using real
-  customer/product/location combinations with new order IDs and row IDs;
-* 1 correction of an already-loaded line (Row ID 1: quantity and sales changed) ->
-  exercises the UPDATE path of the incremental fact load;
-* 1 line identical to an already-loaded one (Row ID 2) -> counted as unchanged;
-* one deliberately defective record per data-quality rule (labelled in the
-  ``Product Name`` of the defective record is NOT changed; see DEFECTS below);
-* returns for some of the new orders plus one orphan return.
-
-Usage::
+The rows are made up (built from real rows with a fixed seed) and are written to
+data/demo_increment/ so the real files in data/raw are never touched. The batch has
+~200 new January 2019 order lines, one corrected existing line, one unchanged
+re-sent line, a couple of duplicates, one bad record per validation rule, a broken
+CSV line and an orphan return.
 
     python scripts/generate_demo_increment.py
     python run_pipeline.py --raw-dir data/demo_increment

@@ -1,7 +1,4 @@
--- =============================================================================
--- 11_discount_impact.sql
--- How discount levels affect margin - a key driver of loss-making sales.
--- =============================================================================
+-- Margin by discount band.
 SELECT
     CASE
         WHEN f.discount = 0     THEN '0% (no discount)'

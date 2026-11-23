@@ -1,7 +1,4 @@
--- =============================================================================
--- 10_return_analysis.sql
--- Return rate and revenue at risk by category and region.
--- =============================================================================
+-- Return rate by category and region.
 SELECT
     p.category,
     r.region,

@@ -1,9 +1,4 @@
--- =============================================================================
--- 06_customer_segmentation_rfm.sql
--- RFM segmentation: Recency, Frequency, Monetary quartiles (NTILE) per customer,
--- measured against the last order date in the warehouse.
--- Returns the size and value of each RFM segment.
--- =============================================================================
+-- RFM segmentation (recency / frequency / monetary quartiles).
 WITH ref AS (
     SELECT MAX(d.full_date) AS as_of_date
     FROM fact_sales f JOIN dim_date d ON d.date_key = f.order_date_key

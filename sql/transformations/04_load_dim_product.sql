@@ -1,7 +1,4 @@
--- =============================================================================
--- 04_load_dim_product.sql
--- Natural key (product_id, product_name). Category attributes: latest wins.
--- =============================================================================
+-- Upsert products. Keyed on id + name because the source reuses some product ids.
 INSERT INTO dim_product (product_id, product_name, category, sub_category, etl_run_id)
 SELECT src.product_id, src.product_name, src.category, src.sub_category, src.etl_run_id
 FROM (

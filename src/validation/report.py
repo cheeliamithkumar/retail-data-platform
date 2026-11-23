@@ -61,7 +61,6 @@ class DataQualityReport:
         self.checks.append(chk)
         return chk
 
-    # ------------------------------------------------------------------ output
     def summary(self) -> dict:
         fails = sum(1 for c in self.checks if c.status == "FAIL")
         warns = sum(1 for c in self.checks if c.status == "WARN")

@@ -1,8 +1,4 @@
--- =============================================================================
--- 08_repeat_customers.sql
--- Repeat-purchase behaviour: customers bucketed by number of orders, with the
--- overall repeat-customer rate computed in a scalar subquery.
--- =============================================================================
+-- How many customers come back, grouped by number of orders.
 WITH customer_orders AS (
     SELECT
         f.customer_key,

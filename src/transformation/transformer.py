@@ -18,7 +18,7 @@ ORDER_SOURCE_COLUMNS = [
     "product_id", "category", "sub_category", "product_name", "sales", "quantity",
     "discount", "profit",
 ]
-# Business content of a transaction (everything except the source line identifier).
+# everything except row_id - used to spot the same transaction sent twice
 ORDER_BUSINESS_COLUMNS = [col for col in ORDER_SOURCE_COLUMNS if col != "row_id"]
 UNKNOWN = "Unknown"
 UNKNOWN_POSTAL = "UNKNOWN"
@@ -48,22 +48,19 @@ class OrdersTransformer:
         out = c.strip_strings(df, ORDER_SOURCE_COLUMNS)
         out[c.PARSE_ERRORS] = ""
 
-        # 1. Exact duplicates (identical in every source field incl. Row ID) are
-        #    re-sent records - drop all but the first.
+        # rows identical in every field (incl. Row ID) were just sent twice
         out, dups = c.remove_exact_duplicates(out, ORDER_SOURCE_COLUMNS)
         stats["exact_duplicates_removed"] = len(dups)
 
-        # 2. Type conversion
         out = c.to_numeric(out, "row_id", integer=True)
         out = c.to_numeric(out, "quantity", integer=True)
         for col in ("sales", "discount", "profit"):
             out = c.to_numeric(out, col)
 
-        # 3. Date standardisation (multiple accepted input formats -> ISO dates)
         for col in ("order_date", "ship_date"):
             out = c.parse_dates(out, col, self.date_formats)
 
-        # 4. Normalise categorical text to a consistent case
+        # consistent casing
         for col in ("ship_mode", "segment", "region", "category", "sub_category"):
             out[col] = c.title_case(out[col])
         out["postal_code"] = c.standardise_postal_code(out["postal_code"])
@@ -71,20 +68,19 @@ class OrdersTransformer:
         out["product_id"] = out["product_id"].str.upper()
         out["order_id"] = out["order_id"].str.upper()
 
-        # 5. Missing-value handling
-        #    a) postal code: impute from other rows of the same city/state, else UNKNOWN
+        # missing postal code: borrow it from another row for the same city, else UNKNOWN
         filled, imputed = c.fill_from_group_mode(out, "postal_code", ["country", "state", "city"])
         out["postal_code"] = filled
         still_missing = out["postal_code"].isna()
         out.loc[still_missing, "postal_code"] = UNKNOWN_POSTAL
         stats["postal_code_imputed"] = int(imputed.sum())
         stats["postal_code_unknown"] = int(still_missing.sum())
-        #    b) missing discount means "no discount" by business definition
+        # no discount recorded = no discount
         no_disc = out["discount"].isna() & ~out[c.PARSE_ERRORS].str.contains("discount:")
         out.loc[no_disc, "discount"] = 0.0
         stats["discount_defaulted_to_zero"] = int(no_disc.sum())
-        #    c) descriptive attributes default to 'Unknown'; keys/measures are left
-        #       missing so the validation layer rejects them.
+        # text attributes default to 'Unknown'. Keys and amounts stay empty so
+        # validation rejects them.
         for col in ("ship_mode", "segment", "country", "city", "state", "category",
                     "sub_category", "customer_name", "product_name"):
             n = int(out[col].isna().sum())
@@ -92,12 +88,11 @@ class OrdersTransformer:
                 out[col] = out[col].fillna(UNKNOWN)
                 stats[f"{col}_defaulted_unknown"] = n
 
-        # 6. Rounding money to warehouse precision
+        # match DECIMAL(12,4) in the warehouse
         for col in ("sales", "profit"):
             out[col] = out[col].round(4)
         out["discount"] = out["discount"].round(4)
 
-        # 7. Derived attributes
         out["ship_days"] = (out["ship_date"] - out["order_date"]).dt.days.astype("Int64")
         with np.errstate(divide="ignore", invalid="ignore"):
             out["unit_price"] = (out["sales"] / out["quantity"].astype("float64")).round(4)
@@ -123,7 +118,7 @@ class ReturnsTransformer:
              "no": False, "n": False, "false": False, "0": False})
         out[c.PARSE_ERRORS] = ""
         c.add_parse_error(out, df["returned"].notna() & out["returned"].isna(), "returned:invalid_flag")
-        # Collapse to order level; duplicates here are expected (one per line), not errors.
+        # one row per returned order (the file has one per returned line)
         out, collapsed = c.remove_exact_duplicates(out, ["order_id", "returned"])
         stats["collapsed_to_order_level"] = len(collapsed)
         stats["output_rows"] = len(out)

@@ -1,7 +1,4 @@
--- =============================================================================
--- 03_year_over_year_growth.sql
--- Annual revenue, profit, orders and customers with YoY growth via LAG.
--- =============================================================================
+-- Yearly totals and YoY growth.
 WITH yearly AS (
     SELECT
         d.calendar_year,

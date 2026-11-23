@@ -13,7 +13,6 @@ def ingest(tmp_path, rows):
     return CSVIngestor(ORDERS_SPEC).ingest(path).data
 
 
-# ------------------------------------------------------------------ generic cleaners
 def test_strip_strings_trims_collapses_and_nulls_empty():
     df = pd.DataFrame({"a": ["  x  y ", "", None, "z"]}, dtype=object)
     out = c.strip_strings(df, ["a"])
@@ -71,7 +70,6 @@ def test_row_hash_is_stable_and_sensitive():
     assert len(h.iloc[0]) == 64
 
 
-# ------------------------------------------------------------------ orders transformer
 def test_orders_transformation_types_and_derivations(tmp_path):
     out = OrdersTransformer().transform(ingest(tmp_path, sample_orders())).data
     assert str(out["row_id"].dtype) == "Int64" and str(out["quantity"].dtype) == "Int64"
@@ -122,7 +120,6 @@ def test_orders_invalid_values_recorded_as_parse_errors(tmp_path):
     assert out[c.PARSE_ERRORS].tolist() == ["sales:invalid_number", "order_date:invalid_date"]
 
 
-# ------------------------------------------------------------------ other sources
 def test_returns_collapse_to_order_level():
     df = pd.DataFrame({"returned": ["Yes", "yes", "Yes", "maybe"],
                        "order_id": ["ca-1", "CA-1", "CA-2", "CA-3"]}, dtype=object)

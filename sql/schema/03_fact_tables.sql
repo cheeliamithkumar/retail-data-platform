@@ -1,9 +1,4 @@
--- =============================================================================
--- 03_fact_tables.sql
--- fact_sales: grain = one order line (one product on one order).
--- The source key (order_id, source_row_id) is UNIQUE, which makes every load
--- idempotent: a re-sent line updates (if changed) instead of duplicating.
--- =============================================================================
+-- One row per order line. (order_id, source_row_id) is unique so reloads can't duplicate rows.
 
 CREATE TABLE IF NOT EXISTS fact_sales (
     sales_key        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -1,14 +1,5 @@
-"""Reusable CSV ingestion.
-
-Responsibilities
-----------------
-* check the file exists and is not empty
-* detect encoding and validate the header against the source contract
-* stream rows in chunks (bounded memory), separating malformed lines
-  (wrong number of fields) with their line numbers
-* attach lineage metadata: source file, source line number, ingestion timestamp
-* never type-cast here - everything is read as text; typing is a transformation concern
-"""
+"""Reads source CSV files: checks the file and header, collects malformed lines,
+and adds source file / line number / load time to every row."""
 from __future__ import annotations
 
 import csv
@@ -76,7 +67,6 @@ class CSVIngestor:
         self.spec = spec
         self.chunk_size = chunk_size
 
-    # ------------------------------------------------------------------ checks
     def check_file(self, path: Path) -> None:
         if not path.exists():
             raise SourceFileMissingError(f"Source file not found: {path}")
@@ -107,7 +97,6 @@ class CSVIngestor:
             raise SchemaValidationError(f"{self.spec.filename}: duplicate columns {sorted(duplicates)}")
         return canonical, extras
 
-    # ------------------------------------------------------------------ reading
     def iter_chunks(self, path: Path, encoding: str) -> Iterator[tuple[list[str], list[list[str]], list[dict]]]:
         """Yield (header, good_rows_with_line_no, malformed) per chunk."""
         with open(path, newline="", encoding=encoding) as fh:

@@ -1,7 +1,4 @@
--- =============================================================================
--- 04_audit_tables.sql
--- ETL audit & data-quality metadata (feeds the Power BI monitoring page).
--- =============================================================================
+-- ETL run history, file registry, DQ results and rejected records.
 
 CREATE TABLE IF NOT EXISTS etl_pipeline_runs (
     run_id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

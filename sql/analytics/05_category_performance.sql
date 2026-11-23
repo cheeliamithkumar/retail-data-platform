@@ -1,7 +1,4 @@
--- =============================================================================
--- 05_category_performance.sql
--- Sub-category performance ranked within each category; flags loss-making lines.
--- =============================================================================
+-- Sub-categories ranked within each category, with loss-makers flagged.
 SELECT
     p.category,
     p.sub_category,

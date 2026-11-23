@@ -41,7 +41,6 @@ class AuditRepository:
         self.engine = engine
         self.pipeline_name = pipeline_name
 
-    # ------------------------------------------------------------------ runs
     def start_run(self, triggered_by: str = "manual") -> int:
         with self.engine.begin() as conn:
             result = conn.execute(text(
@@ -74,7 +73,6 @@ class AuditRepository:
             })
         log.info("Finished pipeline run %s with status %s", run_id, status)
 
-    # ------------------------------------------------------------------ files
     def is_file_processed(self, source: str, checksum: str) -> bool:
         with self.engine.connect() as conn:
             row = conn.execute(text(
@@ -98,7 +96,6 @@ class AuditRepository:
              "size": size, "extracted": extracted, "valid": valid, "rejected": rejected,
              "ts": datetime.now()})
 
-    # ------------------------------------------------------------------ DQ
     def save_dq_results(self, run_id: int, checks: list[CheckResult]) -> None:
         if not checks:
             return
@@ -134,7 +131,6 @@ class AuditRepository:
                     VALUES (:run_id, :source, :file, :line, :reasons, :raw)"""), chunk)
         return len(rows)
 
-    # ------------------------------------------------------------------ lookups for validation
     def known_regions(self) -> set[str]:
         with self.engine.connect() as conn:
             return {r[0] for r in conn.execute(text("SELECT region FROM ref_regional_manager"))}

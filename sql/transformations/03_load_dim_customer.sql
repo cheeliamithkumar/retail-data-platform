@@ -1,8 +1,4 @@
--- =============================================================================
--- 03_load_dim_customer.sql
--- SCD Type 1 upsert. If a customer appears several times in the batch the most
--- recent order's attributes win (ROW_NUMBER window).
--- =============================================================================
+-- Upsert customers. If a customer shows up more than once, the latest order wins.
 INSERT INTO dim_customer (customer_id, customer_name, segment, etl_run_id)
 SELECT src.customer_id, src.customer_name, src.segment, src.etl_run_id
 FROM (

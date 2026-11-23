@@ -1,11 +1,4 @@
--- =============================================================================
--- 06_load_fact_sales.sql
--- Incremental, idempotent fact load:
---   1. resolve surrogate keys for this run's staged rows into a temp table
---   2. UPDATE existing rows whose content hash changed
---   3. INSERT rows whose source key (order_id, source_row_id) is new
--- Re-running the same batch therefore inserts 0 and updates 0 rows.
--- =============================================================================
+-- Incremental fact load: update rows whose hash changed, insert new ones.
 DROP TEMPORARY TABLE IF EXISTS tmp_fact_sales_resolved;
 
 -- PK declared inline: ALTER TABLE would cause an implicit COMMIT mid-load.

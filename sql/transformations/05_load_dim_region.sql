@@ -1,8 +1,4 @@
--- =============================================================================
--- 05_load_dim_region.sql
--- Ship-to locations (country/state/city/postal code) with their sales region,
--- then (re)apply regional managers from the reference table.
--- =============================================================================
+-- Upsert ship-to locations, then attach the regional manager.
 INSERT INTO dim_region (country, region, state, city, postal_code, etl_run_id)
 SELECT src.country, src.region, src.state, src.city, src.postal_code, src.etl_run_id
 FROM (

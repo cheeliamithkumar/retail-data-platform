@@ -1,11 +1,8 @@
-"""Single entry point for the retail ETL pipeline.
+"""Run the ETL pipeline.
 
-Examples::
-
-    python run_pipeline.py                 # incremental run (new/changed files only)
-    python run_pipeline.py --force         # reprocess files even if already loaded
-    python run_pipeline.py --dry-run       # ingest + transform + validate, no database
-    python run_pipeline.py --raw-dir path  # read source files from another folder
+    python run_pipeline.py             # normal run, skips files already loaded
+    python run_pipeline.py --force     # reprocess everything
+    python run_pipeline.py --dry-run   # no database, just ingest/clean/validate
 """
 from __future__ import annotations
 

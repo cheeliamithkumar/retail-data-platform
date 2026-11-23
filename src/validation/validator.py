@@ -63,7 +63,7 @@ class DataValidator:
             mask = rule.check(frame)
             return pd.Series(mask, index=frame.index).fillna(False).astype(bool)
 
-        # Pass 1: row-level rules on every row
+        # row-level rules first
         for rule in (r for r in self.rules if not r.on_survivors):
             mask = run(rule, df)
             failures[rule.name] = mask.reindex(df.index, fill_value=False)
@@ -77,7 +77,7 @@ class DataValidator:
                     m |= failures[rule.name]
             return m
 
-        # Pass 2: set-based rules on the survivors, one after the other
+        # then uniqueness rules, only on rows that are still valid
         for rule in (r for r in self.rules if r.on_survivors):
             survivors = df.loc[~error_mask()]
             mask = run(rule, survivors)

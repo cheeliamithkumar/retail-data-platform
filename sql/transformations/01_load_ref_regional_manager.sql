@@ -1,8 +1,4 @@
--- =============================================================================
--- 01_load_ref_regional_manager.sql
--- Upsert region -> manager reference data from this run's People extract.
--- Requires session variable @run_id.
--- =============================================================================
+-- Region -> manager lookup from the People file. Uses @run_id set by the loader.
 INSERT INTO ref_regional_manager (region, regional_manager, etl_run_id)
 SELECT src.region, src.regional_manager, src.etl_run_id
 FROM (

@@ -1,8 +1,4 @@
-"""End-to-end pipeline orchestration.
-
-    check files -> ingest -> transform -> validate -> stage/load (one transaction)
-    -> post-load integrity checks -> audit + DQ persistence -> reports
-"""
+"""Runs the whole pipeline: ingest -> transform -> validate -> load -> audit -> report."""
 from __future__ import annotations
 
 import getpass
@@ -30,7 +26,7 @@ log = get_logger("pipeline")
 
 TRANSFORMERS = {"orders": OrdersTransformer, "returns": ReturnsTransformer, "people": PeopleTransformer}
 STAGING_TABLE = {"orders": "stg_orders", "returns": "stg_returns", "people": "stg_people"}
-# Records removed for these reasons are expected consolidation, not data errors.
+# returns collapsing to one row per order is expected, not an error
 NON_REJECTION_REASONS = {"COLLAPSED_ORDER_LEVEL"}
 
 
@@ -81,7 +77,6 @@ class RetailPipeline:
         self.loader = WarehouseLoader(engine) if engine is not None else None
         self._batches: dict[str, SourceBatch] = {}
 
-    # ================================================================== public
     def run(self) -> PipelineOutcome:
         started = datetime.now()
         run_id: int | str = f"dryrun_{started:%Y%m%d_%H%M%S}"
@@ -97,9 +92,10 @@ class RetailPipeline:
             log.info("=" * 70)
             log.info("Pipeline run %s started (dry_run=%s, force=%s)", run_id, self.dry_run, self.force)
 
-            batches = self._extract(report)                       # steps 1-2
+            batches = self._extract(report)
             self._batches = batches
-            for name in ("people", "orders", "returns"):          # steps 3-4 (order matters)
+            # people before orders (region check), orders before returns (order check)
+            for name in ("people", "orders", "returns"):
                 if name in batches:
                     self._transform_and_validate(batches[name], batches, report)
             self._write_outputs(batches, run_id, report)
@@ -114,10 +110,10 @@ class RetailPipeline:
                 log.info("No new source files to process.")
             else:
                 if not self.dry_run:
-                    self._load(batches, run_id, report, totals)   # steps 5-6
+                    self._load(batches, run_id, report, totals)
                 status = self._final_status(report)
             report.status = status
-        except Exception as exc:  # noqa: BLE001 - top-level guard: record, report, re-raise later
+        except Exception as exc:  # noqa: BLE001 - log it, mark the run FAILED
             status = "FAILED"
             log.error("Pipeline run %s FAILED: %s", run_id, exc)
             log.debug(traceback.format_exc())
@@ -132,13 +128,12 @@ class RetailPipeline:
         totals["checks_warning"] = summary["checks_warning"]
         if not self.dry_run and isinstance(run_id, int):
             self._persist_audit(run_id, report, totals, status)
-        paths = report.write(self.report_dir)                     # step 7
+        paths = report.write(self.report_dir)
         log.info("Run %s finished: %s in %.2fs | %s", run_id, status,
-                 summary["duration_seconds"], {k: v for k, v in totals.items()})
+                 summary["duration_seconds"], totals)
         log.info("Data quality report: %s", paths[1])
         return PipelineOutcome(run_id, status, report, paths, totals)
 
-    # ================================================================== steps
     def _extract(self, report: DataQualityReport) -> dict[str, SourceBatch]:
         batches: dict[str, SourceBatch] = {}
         for spec in self.specs:
@@ -209,7 +204,7 @@ class RetailPipeline:
         batch.validation = vr
         report.add_checks(vr.checks)
 
-        # Rejected output keeps the ORIGINAL raw values (pre-transformation) + reasons.
+        # write the original raw values to the rejected file, not the cleaned ones
         raw = batch.ingestion.data
         parts = []
         if not batch.ingestion.malformed.empty:
@@ -253,7 +248,7 @@ class RetailPipeline:
     def _load(self, batches: dict[str, SourceBatch], run_id: int, report: DataQualityReport,
               totals: dict) -> None:
         frames = {STAGING_TABLE[n]: b.validation.valid for n, b in batches.items() if b.validation is not None}
-        with self.engine.begin() as conn:                      # single atomic transaction
+        with self.engine.begin() as conn:  # one transaction for the whole load
             stats = self.loader.load(conn, run_id, frames)
             checks = self.loader.integrity_checks(conn)
             for name, b in batches.items():

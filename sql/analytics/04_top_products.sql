@@ -1,7 +1,4 @@
--- =============================================================================
--- 04_top_products.sql
--- Top 10 products by revenue, with profit rank and share of total revenue.
--- =============================================================================
+-- Top 10 products by revenue.
 WITH product_sales AS (
     SELECT
         p.product_key,

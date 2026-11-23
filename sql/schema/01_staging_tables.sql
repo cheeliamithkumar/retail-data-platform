@@ -1,9 +1,4 @@
--- =============================================================================
--- 01_staging_tables.sql
--- Staging layer: typed, validated records from the Python pipeline, landed as-is
--- before being conformed into the star schema by sql/transformations/*.sql.
--- Staging is truncated at the start of every load; etl_run_id gives lineage.
--- =============================================================================
+-- Staging tables. Validated rows from Python land here before the star schema load.
 
 CREATE TABLE IF NOT EXISTS stg_orders (
     stg_id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

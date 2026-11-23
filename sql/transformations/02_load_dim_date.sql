@@ -1,8 +1,4 @@
--- =============================================================================
--- 02_load_dim_date.sql
--- Generate every calendar day for the full years spanned by this batch's order
--- and ship dates using a recursive CTE. INSERT IGNORE keeps it idempotent.
--- =============================================================================
+-- Fill dim_date with every day of the years covered by this batch.
 SET SESSION cte_max_recursion_depth = 100000;
 
 INSERT IGNORE INTO dim_date (

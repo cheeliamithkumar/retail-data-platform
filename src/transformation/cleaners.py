@@ -1,8 +1,4 @@
-"""Generic, reusable column-level cleaning functions.
-
-Every function is pure (returns new objects) so it can be unit-tested in isolation
-and reused for any source.
-"""
+"""Small reusable cleaning functions. They all return new objects."""
 from __future__ import annotations
 
 import hashlib

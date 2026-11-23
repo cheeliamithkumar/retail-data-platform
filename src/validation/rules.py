@@ -1,8 +1,5 @@
-"""Declarative data-quality rules.
-
-A rule is a named function ``DataFrame -> boolean Series`` where ``True`` means the
-row FAILS the rule. ERROR rules reject the row; WARNING rules only flag it.
-"""
+"""Data quality rules. A rule's check returns True for rows that FAIL.
+ERROR rules reject the row, WARNING rules just flag it."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,12 +24,11 @@ class Rule:
     category: str
     severity: Severity
     check: Callable[[pd.DataFrame], pd.Series]
-    # Set-based rules (uniqueness) are evaluated only on rows that passed all
-    # row-level ERROR rules, so a bad first occurrence never knocks out a good one.
+    # uniqueness rules run after the others, so a bad first copy of a row
+    # can't get a good second copy rejected as a duplicate
     on_survivors: bool = False
 
 
-# --------------------------------------------------------------------------- helpers
 def _parse_error_for(df: pd.DataFrame, column: str) -> pd.Series:
     return df[PARSE_ERRORS].fillna("").str.contains(f"{column}:", regex=False)
 
@@ -75,7 +71,6 @@ def in_set_rule(name: str, column: str, allowed: Iterable[str], description: str
     )
 
 
-# --------------------------------------------------------------------------- rule sets
 ORDER_REQUIRED = ["row_id", "order_id", "order_date", "ship_date", "customer_id",
                   "product_id", "region", "sales", "quantity", "profit"]
 

@@ -1,8 +1,4 @@
--- =============================================================================
--- 01_kpi_overview.sql
--- Headline KPIs: total revenue, total profit, profit margin, orders, customers,
--- units, average order value and return rate.
--- =============================================================================
+-- Headline numbers: revenue, profit, margin, orders, customers, AOV, return rate.
 SELECT
     ROUND(SUM(f.sales), 2)                                         AS total_revenue,
     ROUND(SUM(f.profit), 2)                                        AS total_profit,

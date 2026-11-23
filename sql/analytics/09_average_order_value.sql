@@ -1,8 +1,4 @@
--- =============================================================================
--- 09_average_order_value.sql
--- Average order value by year and customer segment, computed at ORDER grain
--- (line items are first rolled up to orders in a CTE).
--- =============================================================================
+-- AOV by year and segment (lines rolled up to orders first).
 WITH orders AS (
     SELECT
         f.order_id,

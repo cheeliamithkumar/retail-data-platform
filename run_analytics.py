@@ -1,8 +1,4 @@
-"""Run every query in sql/analytics against the warehouse and export CSVs to reports/analytics/.
-
-    python run_analytics.py            # run all and print each result
-    python run_analytics.py --quiet    # export only
-"""
+"""Run every query in sql/analytics and save the results to reports/analytics/."""
 from __future__ import annotations
 
 import argparse

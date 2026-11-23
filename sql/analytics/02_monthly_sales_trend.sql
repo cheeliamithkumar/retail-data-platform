@@ -1,8 +1,4 @@
--- =============================================================================
--- 02_monthly_sales_trend.sql
--- Monthly revenue/profit with month-over-month growth (LAG), a 3-month moving
--- average and a running year-to-date total (window functions).
--- =============================================================================
+-- Monthly sales with MoM growth, 3-month moving average and YTD.
 WITH monthly AS (
     SELECT
         d.calendar_year,

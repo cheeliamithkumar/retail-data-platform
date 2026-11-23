@@ -1,8 +1,4 @@
--- =============================================================================
--- 07_apply_returns.sql
--- Flag every line of a returned order. Returns accumulate: a flag is never unset.
--- Runs after the fact load so returns for orders in the same batch are applied.
--- =============================================================================
+-- Flag returned orders. Flags are never cleared.
 UPDATE fact_sales f
 JOIN stg_returns r ON r.order_id = f.order_id
 SET f.is_returned = 1

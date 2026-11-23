@@ -1,8 +1,4 @@
--- =============================================================================
--- 05_reporting_views.sql
--- Views for Power BI and ad-hoc analysis. Power BI should import the star
--- schema tables directly; these views serve flat exports and the monitoring page.
--- =============================================================================
+-- Views used by Power BI and for quick ad-hoc queries.
 
 CREATE OR REPLACE VIEW vw_sales_enriched AS
 SELECT

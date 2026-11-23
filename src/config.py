@@ -1,8 +1,6 @@
-"""Central configuration: paths, database settings and source-file contracts.
+"""Paths, database settings and the expected layout of each source file.
 
-Credentials are read from environment variables (optionally loaded from a local,
-git-ignored ``.env`` file). Nothing secret is ever hard-coded here.
-"""
+Credentials come from environment variables / a local .env file."""
 from __future__ import annotations
 
 import os

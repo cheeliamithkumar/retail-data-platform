@@ -1,9 +1,7 @@
-"""Shared fixtures.
+"""Shared test fixtures.
 
-Unit tests need nothing but pandas. Tests marked ``db`` run against a dedicated
-MySQL test database (``DB_TEST_NAME``, default ``retail_dw_test``) that is dropped
-and recreated per test; they are skipped automatically if MySQL is unreachable.
-"""
+Tests marked `db` need MySQL and use the DB_TEST_NAME database, which gets
+dropped and recreated for each test. They're skipped if MySQL isn't reachable."""
 from __future__ import annotations
 
 import csv
@@ -93,7 +91,6 @@ def sample_orders() -> list[dict]:
     ]
 
 
-# ------------------------------------------------------------------ database fixtures
 def _test_db_config():
     from src.config import DatabaseConfig
     return DatabaseConfig.from_env(database=os.getenv("DB_TEST_NAME", "retail_dw_test"))

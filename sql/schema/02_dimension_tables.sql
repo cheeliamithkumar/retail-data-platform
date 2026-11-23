@@ -1,8 +1,4 @@
--- =============================================================================
--- 02_dimension_tables.sql
--- Star-schema dimensions. Surrogate integer keys; natural keys enforced UNIQUE.
--- Dimensions are SCD Type 1 (attributes overwritten with the latest values).
--- =============================================================================
+-- Dimension tables (SCD type 1) plus the region -> manager lookup.
 
 -- Reference data: one manager per region (source: People sheet).
 CREATE TABLE IF NOT EXISTS ref_regional_manager (

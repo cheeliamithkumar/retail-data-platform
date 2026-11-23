@@ -59,7 +59,6 @@ class WarehouseLoader:
         self.schema_dir = schema_dir
         self.transform_dir = transform_dir
 
-    # ------------------------------------------------------------------ schema
     def ensure_schema(self) -> None:
         """Deploy all DDL (idempotent: CREATE IF NOT EXISTS / CREATE OR REPLACE VIEW)."""
         files = sorted(self.schema_dir.glob("*.sql"))
@@ -68,7 +67,6 @@ class WarehouseLoader:
                 run_sql_file(conn, path)
         log.info("Schema verified (%d DDL scripts)", len(files))
 
-    # ------------------------------------------------------------------ staging
     @staticmethod
     def prepare_staging_frame(table: str, df: pd.DataFrame, run_id: int) -> pd.DataFrame:
         cols = STAGING_COLUMNS[table]
@@ -90,7 +88,6 @@ class WarehouseLoader:
         log.info("Staged %d rows into %s", len(frame), table)
         return len(frame)
 
-    # ------------------------------------------------------------------ warehouse load
     def load(self, conn: Connection, run_id: int, frames: dict[str, pd.DataFrame]) -> LoadStats:
         """Run inside the caller's transaction: stage -> dimensions -> fact -> returns."""
         stats = LoadStats()
@@ -130,7 +127,6 @@ class WarehouseLoader:
         log.info("Load complete: %s", stats.as_dict())
         return stats
 
-    # ------------------------------------------------------------------ post-load checks
     @staticmethod
     def integrity_checks(conn: Connection) -> dict[str, tuple[int, int]]:
         """Warehouse-level checks -> {name: (records_checked, records_failed)}."""

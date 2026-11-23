@@ -1,8 +1,4 @@
--- =============================================================================
--- 07_regional_performance.sql
--- Region scorecard with manager, share of revenue, rank, and each region's
--- best-selling state (correlated logic via ROW_NUMBER in a CTE).
--- =============================================================================
+-- Region scorecard with manager and best state.
 WITH region_totals AS (
     SELECT
         r.region,

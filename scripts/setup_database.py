@@ -1,10 +1,8 @@
-"""Create the warehouse database (if missing) and deploy all DDL from sql/schema.
+"""Create the database if needed and run the DDL in sql/schema.
 
-Usage::
-
-    python scripts/setup_database.py            # database from DB_NAME in .env
-    python scripts/setup_database.py --test     # database from DB_TEST_NAME
-    python scripts/setup_database.py --reset --yes   # DROP and recreate (destroys all data)
+    python scripts/setup_database.py
+    python scripts/setup_database.py --test          # use DB_TEST_NAME instead
+    python scripts/setup_database.py --reset --yes   # drop everything first
 """
 from __future__ import annotations
 

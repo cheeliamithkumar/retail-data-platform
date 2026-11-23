@@ -1,24 +1,14 @@
-"""Download the public "Sample - Superstore" retail dataset and split it into raw sources.
+"""Download the Superstore sample dataset and split it into separate raw files.
 
-Source
-------
-Tableau's "Sample - Superstore" dataset (US retail orders 2015-2018), as mirrored at
-https://github.com/leonism/sample-superstore (``data/superstore.csv``).
+Source: Tableau's "Sample - Superstore" data, mirrored at
+https://github.com/leonism/sample-superstore (data/superstore.csv).
 
-The mirrored CSV is an export of the original Excel workbook with its three sheets
-concatenated one after another:
+That CSV is the Excel workbook exported with its three sheets stacked on top of
+each other (Orders, People, Returns), so this script splits them into
+data/raw/superstore_orders.csv, superstore_people.csv and superstore_returns.csv.
 
-* ``Orders``  - 9,994 order lines (header starts with ``Row ID``)
-* ``People``  - regional managers  (header ``Person,Region``)
-* ``Returns`` - returned orders    (header ``Returned,Order ID``)
-
-This script splits them into three CSV files in ``data/raw`` so each can be ingested
-as an independent source, mirroring how separate source-system extracts arrive.
-
-Usage::
-
-    python scripts/download_dataset.py            # download + split
-    python scripts/download_dataset.py --file x   # split an already-downloaded file
+    python scripts/download_dataset.py
+    python scripts/download_dataset.py --file my_copy.csv
 """
 from __future__ import annotations
 
