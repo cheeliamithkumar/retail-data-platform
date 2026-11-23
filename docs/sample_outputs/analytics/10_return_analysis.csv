@@ -1,0 +1,13 @@
+category,region,orders,returned_orders,return_rate_pct,returned_revenue
+Furniture,West,595,88,14.79,34876.14
+Technology,West,490,68,13.88,43154.80
+Office Supplies,West,1169,149,12.75,29452.11
+Technology,East,443,29,6.55,20056.17
+Technology,South,255,13,5.10,6206.52
+Furniture,South,278,13,4.68,6519.07
+Furniture,East,488,22,4.51,13812.78
+Technology,Central,356,13,3.65,3290.68
+Office Supplies,Central,880,32,3.64,6705.13
+Furniture,Central,403,13,3.23,4011.17
+Office Supplies,East,1074,34,3.17,7836.19
+Office Supplies,South,619,19,3.07,4583.50

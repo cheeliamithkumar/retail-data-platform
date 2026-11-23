@@ -1,0 +1,5 @@
+order_frequency_band,customers,pct_of_customers,revenue,pct_of_revenue,avg_revenue_per_customer,overall_repeat_customer_rate_pct
+1 order (one-time),12,1.51,5167.64,0.22,430.64,98.49
+2-4 orders,183,23.08,273560.63,11.91,1494.87,98.49
+5-9 orders,510,64.31,1574005.16,68.53,3086.28,98.49
+10+ orders,88,11.10,444186.05,19.34,5047.57,98.49

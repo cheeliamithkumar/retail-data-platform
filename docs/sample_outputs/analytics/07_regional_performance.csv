@@ -1,0 +1,5 @@
+revenue_rank,region,regional_manager,revenue,profit,profit_margin_pct,revenue_share_pct,orders,customers,average_order_value,top_state,top_state_revenue
+1,West,Anna Andreadi,725457.82,108418.45,14.94,31.58,1611,686,450.32,California,457687.63
+2,East,Chuck Magee,678499.87,91534.84,13.49,29.54,1401,674,484.30,New York,310876.27
+3,Central,Kelly Williams,501239.89,39706.36,7.92,21.82,1175,629,426.59,Texas,170188.05
+4,South,Cassandra Brandow,391721.91,46749.43,11.93,17.05,822,512,476.55,Florida,89473.71
