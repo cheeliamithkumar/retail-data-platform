@@ -1,22 +1,20 @@
-# Data Warehouse Schema (MySQL 8, database `retail_dw`)
+# Warehouse schema
 
-DDL lives in `sql/schema/` and is applied in file order by `scripts/setup_database.py` (and
-automatically, idempotently, at the start of every pipeline run).
+Database: `retail_dw` (MySQL 8). The DDL is in `sql/schema/` and runs in file order. The pipeline
+runs it at the start of every run too; it only creates things that don't exist yet.
 
-| File | Contents |
-|---|---|
-| `01_staging_tables.sql` | `stg_orders`, `stg_returns`, `stg_people` |
-| `02_dimension_tables.sql` | `ref_regional_manager`, `dim_date`, `dim_customer`, `dim_product`, `dim_region` |
-| `03_fact_tables.sql` | `fact_sales` |
-| `04_audit_tables.sql` | `etl_pipeline_runs`, `etl_file_registry`, `etl_data_quality_results`, `etl_rejected_records` |
-| `05_reporting_views.sql` | `vw_sales_enriched`, `vw_pipeline_run_history`, `vw_dq_check_results`, `vw_rejection_summary` |
+- `01_staging_tables.sql`: `stg_orders`, `stg_returns`, `stg_people`
+- `02_dimension_tables.sql`: `ref_regional_manager`, `dim_date`, `dim_customer`, `dim_product`, `dim_region`
+- `03_fact_tables.sql`: `fact_sales`
+- `04_audit_tables.sql`: `etl_pipeline_runs`, `etl_file_registry`, `etl_data_quality_results`, `etl_rejected_records`
+- `05_reporting_views.sql`: `vw_sales_enriched`, `vw_pipeline_run_history`, `vw_dq_check_results`, `vw_rejection_summary`
 
 ## Star schema
 
 ```mermaid
 erDiagram
     dim_date     ||--o{ fact_sales : "order_date_key"
-    dim_date     ||--o{ fact_sales : "ship_date_key (role-playing)"
+    dim_date     ||--o{ fact_sales : "ship_date_key"
     dim_customer ||--o{ fact_sales : customer_key
     dim_product  ||--o{ fact_sales : product_key
     dim_region   ||--o{ fact_sales : region_key
@@ -24,8 +22,8 @@ erDiagram
 
     fact_sales {
         bigint sales_key PK
-        varchar order_id "UK with source_row_id"
-        int source_row_id "UK with order_id"
+        varchar order_id
+        int source_row_id
         int order_date_key FK
         int ship_date_key FK
         int customer_key FK
@@ -36,29 +34,23 @@ erDiagram
         decimal sales
         decimal discount
         decimal profit
-        decimal unit_price
-        int ship_days
         tinyint is_returned
-        char row_hash
-        char business_hash
-        bigint etl_run_id
     }
     dim_customer {
         int customer_key PK
-        varchar customer_id UK
+        varchar customer_id
         varchar customer_name
         varchar segment
     }
     dim_product {
         int product_key PK
-        varchar product_id "UK with product_name"
+        varchar product_id
         varchar product_name
         varchar category
         varchar sub_category
     }
     dim_region {
         int region_key PK
-        varchar country "UK (country,state,city,postal_code)"
         varchar region
         varchar state
         varchar city
@@ -66,106 +58,100 @@ erDiagram
         varchar regional_manager
     }
     dim_date {
-        int date_key PK "YYYYMMDD"
-        date full_date UK
+        int date_key PK
+        date full_date
         smallint calendar_year
         tinyint month_number
         varchar month_name
-        tinyint quarter_number
-        char year_month_label
-        tinyint is_weekend
     }
 ```
 
-**Grain of `fact_sales`:** one order line (one product on one order), i.e. one row of the source
-Orders extract.
+`fact_sales` has one row per order line (one product on one order), the same grain as the source
+Orders file.
 
-### Design notes
+### Why it's shaped like this
 
-* **Surrogate keys** (`*_key`, auto-increment) decouple the warehouse from source identifiers;
-  natural keys are protected by `UNIQUE` constraints.
-* **SCD Type 1** dimensions: attributes are overwritten with the latest value. When a key occurs
-  several times in a batch, the most recent order wins (`ROW_NUMBER()` window in the load SQL).
-  `etl_run_id` on a dimension row records the last run that actually *changed* it.
-* **`dim_product` natural key = (`product_id`, `product_name`).** The source re-uses 32 Product IDs
-  for different product names (detected by the `PRODUCT_ID_MULTIPLE_NAMES` warning: 337 order
-  lines). Keying on the ID alone would silently attribute sales to the wrong product name.
-* **`dim_region` grain = ship-to location** (country, state, city, postal code) rolling up to the
-  four sales regions and their managers. Customers ship to several locations (766 of 793 customers
-  appear in more than one region), so geography cannot live on `dim_customer`.
-* **`dim_date`** is generated in SQL with a recursive CTE covering full calendar years of the data.
-  It is role-playing: `order_date_key` (active in Power BI) and `ship_date_key` (inactive).
-* **Degenerate dimensions** `order_id` and `ship_mode` stay on the fact table.
-* **`is_returned`** comes from the Returns extract (order-level) and flags every line of a returned
-  order.
+- Every dimension has an auto-increment surrogate key. The source IDs are kept with a unique
+  constraint on them.
+- Dimensions are SCD type 1: when an attribute changes, the old value is overwritten. If a customer
+  appears more than once in a batch, the most recent order wins (`ROW_NUMBER()` in the load SQL).
+- `dim_product` is unique on (product_id, product_name), not just product_id. The source uses 32
+  product IDs for more than one product name (that's the `PRODUCT_ID_MULTIPLE_NAMES` warning on
+  337 rows). Keying on the ID alone would have credited sales to the wrong product.
+- `dim_region` is one row per ship-to location (country, state, city, postal code), rolling up to
+  the 4 regions and their managers. Location can't go on the customer because 766 of the 793
+  customers ordered to more than one region.
+- `dim_date` is generated with a recursive CTE covering whole calendar years. The fact table uses
+  it twice: once for the order date and once for the ship date.
+- `order_id` and `ship_mode` just stay on the fact table. They don't need their own tables.
+- `is_returned` comes from the returns file and is set on every line of a returned order.
 
-## Table reference
+## Tables
 
-### `fact_sales`
+### fact_sales
 
-| Column | Type | Description |
+| Column | Type | Notes |
 |---|---|---|
-| sales_key | BIGINT UNSIGNED PK | Surrogate key |
-| order_id | VARCHAR(25) | Source order number (degenerate dimension) |
-| source_row_id | INT | Source line identifier ("Row ID"); `UNIQUE(order_id, source_row_id)` |
-| order_date_key / ship_date_key | INT FK -> dim_date | YYYYMMDD |
-| customer_key / product_key / region_key | INT FK | Dimension keys |
-| ship_mode | VARCHAR(30) | First / Second / Standard Class, Same Day |
-| quantity | INT | Units, `CHECK (quantity > 0)` |
-| sales | DECIMAL(12,4) | Net revenue after discount, `CHECK (sales > 0)` |
-| discount | DECIMAL(5,4) | Discount rate, `CHECK (0 <= discount < 1)` |
-| profit | DECIMAL(12,4) | Profit (can be negative), `CHECK (profit <= sales)` |
-| unit_price | DECIMAL(12,4) | sales / quantity (derived) |
-| ship_days | INT | ship_date - order_date (derived) |
-| is_returned | TINYINT(1) | 1 if the order appears in Returns |
-| row_hash | CHAR(64) | SHA-256 of all source fields - change detection |
-| business_hash | CHAR(64) | SHA-256 excluding row id - duplicate-transaction detection |
-| etl_run_id | BIGINT | Run that last inserted/updated the row |
-| created_at / updated_at | TIMESTAMP | Housekeeping |
+| sales_key | BIGINT PK | surrogate key |
+| order_id | VARCHAR(25) | from the source |
+| source_row_id | INT | the source "Row ID"; (order_id, source_row_id) is unique |
+| order_date_key, ship_date_key | INT FK | YYYYMMDD, link to dim_date |
+| customer_key, product_key, region_key | INT FK | |
+| ship_mode | VARCHAR(30) | |
+| quantity | INT | CHECK > 0 |
+| sales | DECIMAL(12,4) | after discount, CHECK > 0 |
+| discount | DECIMAL(5,4) | CHECK between 0 and 1 |
+| profit | DECIMAL(12,4) | can be negative, CHECK <= sales |
+| unit_price | DECIMAL(12,4) | sales / quantity |
+| ship_days | INT | days between order and ship |
+| is_returned | TINYINT(1) | |
+| row_hash | CHAR(64) | hash of all source fields, used to spot changed rows |
+| business_hash | CHAR(64) | same but without the row id, used to spot repeated transactions |
+| etl_run_id | BIGINT | the run that last inserted or changed the row |
+| created_at, updated_at | TIMESTAMP | |
 
-Indexes: PK, `uq_fact_sales_source`, one index per foreign key (`customer_key` composite with
-`order_date_key` for customer-over-time queries), and `business_hash`.
+Indexed on each foreign key (customer_key together with order_date_key), on the unique source key
+and on business_hash.
 
-### `dim_customer`
-`customer_key` PK, `customer_id` UNIQUE, `customer_name`, `segment` (Consumer / Corporate /
-Home Office), `etl_run_id`, timestamps. Index on `segment`.
+### dim_customer
+`customer_key`, `customer_id` (unique), `customer_name`, `segment` (Consumer / Corporate / Home
+Office), `etl_run_id`, timestamps.
 
-### `dim_product`
-`product_key` PK, `product_id`, `product_name` (`UNIQUE(product_id, product_name)`), `category`,
-`sub_category`, `etl_run_id`, timestamps. Index on `(category, sub_category)`.
+### dim_product
+`product_key`, `product_id` + `product_name` (unique together), `category`, `sub_category`,
+`etl_run_id`, timestamps.
 
-### `dim_region`
-`region_key` PK, `country`, `region`, `state`, `city`, `postal_code`
-(`UNIQUE(country, state, city, postal_code)`), `regional_manager`, `etl_run_id`, timestamps.
-Postal codes are strings with leading zeros restored (`5401` -> `05401`); a missing code that
-cannot be imputed is stored as `UNKNOWN` (11 Burlington, Vermont lines in the real data).
+### dim_region
+`region_key`, `country`, `region`, `state`, `city`, `postal_code` (country/state/city/postal code
+unique together), `regional_manager`, `etl_run_id`, timestamps. Postal codes are stored as text so
+leading zeros survive. The 11 Burlington, VT rows with no postal code are stored as `UNKNOWN`.
 
-### `dim_date`
-`date_key` (YYYYMMDD) PK, `full_date` UNIQUE, `day_of_month`, `day_name`, `day_of_week`
-(1 = Monday), `day_of_year`, `week_of_year` (ISO), `month_number`, `month_name`, `month_short`,
-`quarter_number`, `quarter_name`, `calendar_year`, `year_month_label` (YYYY-MM),
-`year_quarter_label` (YYYY-Qn), `first_day_of_month`, `is_weekend`.
-(`year_month` is a reserved word in MySQL, hence `year_month_label`.)
+### dim_date
+`date_key` (YYYYMMDD), `full_date`, day/week/month/quarter/year columns, `year_month_label`
+(YYYY-MM), `year_quarter_label`, `first_day_of_month`, `is_weekend`. (The column is
+`year_month_label` because `year_month` is a reserved word in MySQL.)
 
-### `ref_regional_manager`
-`region` PK, `regional_manager`. Persisted so that region managers are applied even in runs where
-the People file is unchanged and skipped.
+### ref_regional_manager
+Region and manager. It's kept as its own table so managers still get applied in runs where the
+people file hasn't changed and gets skipped.
 
-### Staging tables
-`stg_orders`, `stg_returns`, `stg_people` hold the validated, typed rows of the current batch with
-`etl_run_id`, `source_file`, `source_line` and `ingested_at`. They are cleared at the start of each
-load (inside the load transaction) and keep the last batch for debugging.
+### Staging
+`stg_orders`, `stg_returns` and `stg_people` hold the cleaned rows for the current batch, plus
+`etl_run_id`, `source_file`, `source_line` and `ingested_at`. They're emptied at the start of each
+load (inside the same transaction) and keep the last batch around, which is handy for debugging.
 
 ## Audit tables
 
-| Table | Grain | Key columns |
-|---|---|---|
-| `etl_pipeline_runs` | one row per run | `run_id`, `run_uuid`, `start_ts`, `end_ts`, `status`, `records_extracted`, `records_valid`, `records_rejected`, `records_loaded` (inserted), `records_updated`, `records_unchanged`, `checks_failed`, `checks_warning`, `triggered_by`, `error_message` |
-| `etl_file_registry` | one row per distinct file content | `source_name`, `file_name`, `file_checksum` (`UNIQUE(source_name, file_checksum)`), size, counts, `run_id`, `processed_at` |
-| `etl_data_quality_results` | one row per check per run | `run_id`, `source_name`, `check_name`, `check_category`, `severity`, `records_checked`, `records_failed`, `check_status` (PASS/WARN/FAIL) |
-| `etl_rejected_records` | one row per rejected record | `run_id`, `source_name`, `source_file`, `source_line`, `rejection_reasons`, `raw_record` (JSON of original values) |
+- `etl_pipeline_runs`: one row per run. Start/end time, status, rows read / valid / rejected /
+  inserted / updated / unchanged, failed and warning check counts, who ran it, and the error message
+  if it failed.
+- `etl_file_registry`: one row per distinct file content (source name + SHA-256 is unique). This
+  is how already-loaded files get skipped.
+- `etl_data_quality_results`: one row per check per run.
+- `etl_rejected_records`: one row per rejected row, with the reasons and the original values as
+  JSON.
 
-Example: inspect the raw values of rejected records
+To see the rejected rows from the latest run:
 
 ```sql
 SELECT source_line, rejection_reasons,
@@ -175,45 +161,41 @@ FROM etl_rejected_records
 WHERE run_id = (SELECT MAX(run_id) FROM etl_pipeline_runs);
 ```
 
-## Load SQL (`sql/transformations/`, run in order inside one transaction)
+## Load SQL
 
-| File | Technique |
-|---|---|
-| `01_load_ref_regional_manager.sql` | `INSERT ... SELECT ... ON DUPLICATE KEY UPDATE` |
-| `02_load_dim_date.sql` | Recursive CTE calendar generator, `INSERT IGNORE` |
-| `03_load_dim_customer.sql` | SCD1 upsert, `ROW_NUMBER()` to pick latest attributes |
-| `04_load_dim_product.sql` | SCD1 upsert on composite natural key |
-| `05_load_dim_region.sql` | SCD1 upsert + manager enrichment via `UPDATE ... JOIN` |
-| `06_load_fact_sales.sql` | Key resolution into a temp table, hash-based `UPDATE`, anti-join `INSERT` |
-| `07_apply_returns.sql` | `UPDATE ... JOIN` to flag returned orders |
+These run in order inside one transaction. They only touch the current batch (via `@run_id`,
+which the loader sets).
 
-The scripts read the session variable `@run_id`, set by the loader, so they only touch the current
-batch.
+1. `01_load_ref_regional_manager.sql`: upsert the region managers
+2. `02_load_dim_date.sql`: generate dates with a recursive CTE (`INSERT IGNORE`)
+3. `03_load_dim_customer.sql`: upsert customers; `ROW_NUMBER()` picks the latest attributes
+4. `04_load_dim_product.sql`: upsert products on (id, name)
+5. `05_load_dim_region.sql`: upsert locations, then set managers with `UPDATE ... JOIN`
+6. `06_load_fact_sales.sql`: look up the surrogate keys into a temp table, update rows whose hash
+   changed, insert rows that are new
+7. `07_apply_returns.sql`: flag returned orders
 
-## Reporting views
+## Views
 
-| View | Purpose |
-|---|---|
-| `vw_sales_enriched` | Flat, denormalised order lines with all dimension attributes (exports, ad-hoc SQL) |
-| `vw_pipeline_run_history` | Runs with duration and rejection rate (Power BI monitoring page) |
-| `vw_dq_check_results` | Every DQ check of every run with the run timestamp |
-| `vw_rejection_summary` | Rejected record counts by run, source and reason |
+- `vw_sales_enriched`: fact rows joined to every dimension. Good for exports and quick queries.
+- `vw_pipeline_run_history`: runs with duration and rejection rate.
+- `vw_dq_check_results`: every check from every run.
+- `vw_rejection_summary`: rejected row counts by run, source and reason.
 
-## Analytical query library (`sql/analytics/`)
+## Analysis queries (sql/analytics)
 
-| File | Question answered | SQL features |
+| File | What it answers | SQL used |
 |---|---|---|
-| `01_kpi_overview.sql` | Revenue, profit, margin, orders, customers, AOV, return rate | conditional aggregation |
-| `02_monthly_sales_trend.sql` | Monthly trend, MoM growth, 3-month moving average, YTD | CTE, `LAG`, framed window, named `WINDOW` |
-| `03_year_over_year_growth.sql` | YoY growth of revenue/profit/orders | CTE, `LAG` |
-| `04_top_products.sql` | Top 10 products, profit rank, revenue share | CTE, `RANK`, `SUM() OVER ()` |
-| `05_category_performance.sql` | Sub-category ranking inside each category, loss makers | `DENSE_RANK` partitioned, window over aggregate |
-| `06_customer_segmentation_rfm.sql` | RFM customer segments | multiple CTEs, `NTILE`, scalar subquery, `CASE` |
-| `07_regional_performance.sql` | Region scorecard with manager and top state | CTEs, `ROW_NUMBER`, `RANK` |
-| `08_repeat_customers.sql` | Repeat-purchase bands and repeat rate | CTE, scalar subquery |
-| `09_average_order_value.sql` | AOV by year and segment at order grain | CTE roll-up line -> order |
-| `10_return_analysis.sql` | Return rate by category and region | `COUNT(DISTINCT CASE ...)` |
-| `11_discount_impact.sql` | Margin by discount band | `CASE` banding, boolean averaging |
+| 01_kpi_overview | revenue, profit, margin, orders, customers, AOV, return rate | conditional aggregation |
+| 02_monthly_sales_trend | monthly trend, MoM %, 3-month average, YTD | CTE, LAG, window frames |
+| 03_year_over_year_growth | yearly growth | CTE, LAG |
+| 04_top_products | top 10 products and their share | RANK, SUM() OVER () |
+| 05_category_performance | sub-categories ranked in each category | DENSE_RANK with PARTITION BY |
+| 06_customer_segmentation_rfm | RFM segments | several CTEs, NTILE, subquery |
+| 07_regional_performance | region scorecard and top state | ROW_NUMBER, RANK |
+| 08_repeat_customers | how many customers come back | CTE, scalar subquery |
+| 09_average_order_value | AOV by year and segment | lines rolled up to orders in a CTE |
+| 10_return_analysis | return rate by category and region | COUNT(DISTINCT CASE ...) |
+| 11_discount_impact | margin by discount band | CASE banding |
 
-Run them all with `python run_analytics.py`; results land in `reports/analytics/*.csv`. The outputs
-from the real dataset are committed in `docs/sample_outputs/analytics/`.
+The results from the real data are in `docs/sample_outputs/analytics/`.

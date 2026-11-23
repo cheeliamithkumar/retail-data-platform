@@ -1,126 +1,97 @@
-# Power BI Guide
+# Power BI setup
 
-> **Status:** Power BI Desktop is a Windows application and was not available in the Linux
-> environment where this project was built, so **no `.pbix` file is included**. This guide gives
-> the exact manual steps to build the report on top of the warehouse. Once you have built it, save
-> it as a template (`File > Export > Power BI template`, `.pbit`) and commit that instead of the
-> `.pbix` (which contains data and is git-ignored).
+There's no `.pbix` in the repo yet. I built the project on Linux, and Power BI Desktop only runs on
+Windows, so these are the steps for building the report yourself. Once it's built, save it as a
+template (File > Export > Power BI template) and commit the `.pbit`. The `.pbix` is git-ignored
+because it contains the data.
 
-## 1. Prerequisites
+## What you need
 
-1. Power BI Desktop (free, Microsoft Store or microsoft.com/power-bi).
-2. **MySQL Connector/NET** - Power BI's built-in *MySQL database* connector needs it installed.
-   Download it from dev.mysql.com/downloads/connector/net/, install, and restart Power BI.
-   (Alternative: MySQL Connector/ODBC + Power BI's *ODBC* connector.)
-3. The warehouse loaded: `python run_pipeline.py`.
-4. A **read-only** MySQL account for reporting (never use the ETL account in Power BI). Run as a
-   MySQL admin, choosing your own password:
+1. Power BI Desktop (free).
+2. MySQL Connector/NET. Power BI's MySQL connector won't work without it. Download it from
+   dev.mysql.com/downloads/connector/net/, install it, and restart Power BI.
+3. The warehouse loaded (`python run_pipeline.py`).
+4. A read-only MySQL user for Power BI, so the report can't change anything:
 
 ```sql
-CREATE USER 'powerbi_reader'@'localhost' IDENTIFIED BY '<choose-a-strong-password>';
+CREATE USER 'powerbi_reader'@'localhost' IDENTIFIED BY 'your_password';
 GRANT SELECT ON retail_dw.* TO 'powerbi_reader'@'localhost';
 ```
 
-## 2. Connect
+## Connecting
 
-1. `Home > Get data > More... > Database > MySQL database > Connect`.
-2. Server: `localhost:3306` (or `127.0.0.1:3306`). Database: `retail_dw`.
-3. Credentials: choose **Database**, enter `powerbi_reader` and its password. Power BI stores them
-   in its own credential store, not in the report.
-4. If prompted about encryption on a local server, select *OK* to connect without encryption
-   (local development only).
-5. In the Navigator tick:
-   * `fact_sales`, `dim_customer`, `dim_product`, `dim_region`, `dim_date`
-   * `vw_pipeline_run_history`, `vw_dq_check_results`, `vw_rejection_summary`
-6. Click **Transform Data** (not Load) and apply section 3.
+1. Home > Get data > More... > MySQL database.
+2. Server `localhost:3306`, database `retail_dw`.
+3. Choose Database credentials and sign in as `powerbi_reader`.
+4. If it asks about encryption on a local server, just continue without it.
+5. Tick these tables:
+   - `fact_sales`, `dim_customer`, `dim_product`, `dim_region`, `dim_date`
+   - `vw_pipeline_run_history`, `vw_dq_check_results`, `vw_rejection_summary`
+6. Click Transform Data rather than Load.
 
-**Storage mode:** use **Import**. The dataset is ~10k fact rows, so Import gives the fastest visuals;
-refresh after each pipeline run (`Home > Refresh`). DirectQuery is only worth it for very large or
-near-real-time data.
+Use Import mode. With about 10k rows it's fast, and you just hit Refresh after each pipeline run.
 
-## 3. Power Query preparation
+## Cleaning up in Power Query
 
-| Table | Steps |
-|---|---|
-| fact_sales | Remove `row_hash`, `business_hash`, `created_at`, `updated_at`. Set `sales`, `profit`, `unit_price` to *Fixed decimal number*, `discount` to *Percentage*, `is_returned` to *True/False*. |
-| dim_customer / dim_product / dim_region | Remove `etl_run_id`, `created_at`, `updated_at`. |
-| dim_date | Set `full_date` to *Date*. |
-| vw_* | Set `start_ts`/`end_ts`/`run_start_ts` to *Date/Time*; `rejection_rate_pct` to *Decimal number*. |
+- `fact_sales`: remove `row_hash`, `business_hash`, `created_at` and `updated_at`. Make `sales`,
+  `profit` and `unit_price` fixed decimal, `discount` a percentage and `is_returned` true/false.
+- Dimensions: remove `etl_run_id`, `created_at` and `updated_at`.
+- `dim_date`: make `full_date` a Date.
+- Views: make the timestamp columns Date/Time.
 
-Rename the queries to friendly names if you like (`Sales`, `Customer`, `Product`, `Location`, `Date`,
-`Pipeline Runs`, `DQ Checks`, `Rejections`). The DAX below uses the original table names.
+Then Close & Apply.
 
-`Close & Apply`.
+## Model
 
-## 4. Model
+Relationships (all many-to-one, single direction):
 
-In **Model view**:
-
-| From (many) | To (one) | Cardinality | Active | Cross-filter |
-|---|---|---|---|---|
-| fact_sales[order_date_key] | dim_date[date_key] | *:1 | **Yes** | Single |
-| fact_sales[ship_date_key] | dim_date[date_key] | *:1 | No (inactive) | Single |
-| fact_sales[customer_key] | dim_customer[customer_key] | *:1 | Yes | Single |
-| fact_sales[product_key] | dim_product[product_key] | *:1 | Yes | Single |
-| fact_sales[region_key] | dim_region[region_key] | *:1 | Yes | Single |
-| vw_dq_check_results[run_id] | vw_pipeline_run_history[run_id] | *:1 | Yes | Single |
-| vw_rejection_summary[run_id] | vw_pipeline_run_history[run_id] | *:1 | Yes | Single |
+- `fact_sales[order_date_key]` -> `dim_date[date_key]` (active)
+- `fact_sales[ship_date_key]` -> `dim_date[date_key]` (**inactive**, used with `USERELATIONSHIP`)
+- `fact_sales[customer_key]` -> `dim_customer[customer_key]`
+- `fact_sales[product_key]` -> `dim_product[product_key]`
+- `fact_sales[region_key]` -> `dim_region[region_key]`
+- `vw_dq_check_results[run_id]` -> `vw_pipeline_run_history[run_id]`
+- `vw_rejection_summary[run_id]` -> `vw_pipeline_run_history[run_id]`
 
 Then:
-1. Select `dim_date` > *Table tools* > **Mark as date table** > column `full_date`.
-2. Sort `dim_date[month_name]` by `month_number` and `month_short` by `month_number`
-   (*Column tools > Sort by column*); sort `day_name` by `day_of_week`.
-3. Hide all `*_key` columns and `source_row_id` from report view.
-4. Set data categories on `dim_region`: `country` = Country, `state` = State or Province,
-   `city` = City, `postal_code` = Postal code (enables the map visual).
-5. Create a hierarchy in `dim_date`: `calendar_year > quarter_name > month_name > full_date`; and
-   in `dim_product`: `category > sub_category > product_name`; in `dim_region`:
-   `region > state > city`.
-6. Create an empty table **_Measures** (`Enter data`, one dummy column, then hide it) and put all
-   measures in it.
 
-## 5. DAX measures
+- Mark `dim_date` as the date table, using `full_date`.
+- Sort `month_name` and `month_short` by `month_number`, and `day_name` by `day_of_week`.
+- Hide the `*_key` columns and `source_row_id`.
+- On `dim_region`, set the data category of `country`, `state`, `city` and `postal_code` so the map
+  visual works.
+- Add hierarchies: year > quarter > month > date; category > sub-category > product;
+  region > state > city.
+- Keep all the measures in an empty `_Measures` table.
 
-### Core sales
+## DAX measures
+
+Sales:
+
 ```DAX
 Total Revenue = SUM ( fact_sales[sales] )
-
 Total Profit = SUM ( fact_sales[profit] )
-
 Profit Margin % = DIVIDE ( [Total Profit], [Total Revenue] )
-
 Total Orders = DISTINCTCOUNT ( fact_sales[order_id] )
-
 Total Customers = DISTINCTCOUNT ( fact_sales[customer_key] )
-
 Units Sold = SUM ( fact_sales[quantity] )
-
 Average Order Value = DIVIDE ( [Total Revenue], [Total Orders] )
-
 Average Discount % = AVERAGE ( fact_sales[discount] )
-
 Average Ship Days = AVERAGE ( fact_sales[ship_days] )
-
 Loss-Making Lines = CALCULATE ( COUNTROWS ( fact_sales ), fact_sales[profit] < 0 )
 ```
 
-### Time intelligence (requires dim_date marked as date table)
+Time comparisons (these need `dim_date` marked as the date table):
+
 ```DAX
 Revenue PY = CALCULATE ( [Total Revenue], SAMEPERIODLASTYEAR ( dim_date[full_date] ) )
-
 Revenue YoY % = DIVIDE ( [Total Revenue] - [Revenue PY], [Revenue PY] )
-
 Profit PY = CALCULATE ( [Total Profit], SAMEPERIODLASTYEAR ( dim_date[full_date] ) )
-
 Profit YoY % = DIVIDE ( [Total Profit] - [Profit PY], [Profit PY] )
-
 Revenue YTD = TOTALYTD ( [Total Revenue], dim_date[full_date] )
-
 Revenue PM = CALCULATE ( [Total Revenue], DATEADD ( dim_date[full_date], -1, MONTH ) )
-
 Revenue MoM % = DIVIDE ( [Total Revenue] - [Revenue PM], [Revenue PM] )
 
--- Trailing 3 months of revenue / 3 (use on a monthly axis)
 Revenue 3M Moving Avg =
 DIVIDE (
     CALCULATE (
@@ -137,11 +108,10 @@ CALCULATE (
 )
 ```
 
-> `Revenue 3M Moving Avg` divides by 3 even for the first two months of the data, so ignore
-> it for Jan-Feb 2015 (the SQL version in `02_monthly_sales_trend.sql` averages the months
-> available instead).
+(The 3-month average always divides by 3, so ignore it for Jan and Feb 2015.)
 
-### Customers and returns
+Customers and returns:
+
 ```DAX
 Repeat Customers =
 COUNTROWS (
@@ -150,19 +120,15 @@ COUNTROWS (
         CALCULATE ( DISTINCTCOUNT ( fact_sales[order_id] ) ) > 1
     )
 )
-
 Repeat Customer Rate % = DIVIDE ( [Repeat Customers], [Total Customers] )
-
 Revenue per Customer = DIVIDE ( [Total Revenue], [Total Customers] )
-
 Returned Orders = CALCULATE ( [Total Orders], fact_sales[is_returned] = TRUE () )
-
 Return Rate % = DIVIDE ( [Returned Orders], [Total Orders] )
-
 Returned Revenue = CALCULATE ( [Total Revenue], fact_sales[is_returned] = TRUE () )
 ```
 
-### Ranking
+Ranking:
+
 ```DAX
 Product Revenue Rank =
 IF (
@@ -174,7 +140,8 @@ Region Revenue Share % =
 DIVIDE ( [Total Revenue], CALCULATE ( [Total Revenue], ALLSELECTED ( dim_region ) ) )
 ```
 
-### Pipeline monitoring
+Pipeline monitoring:
+
 ```DAX
 Latest Run ID = MAX ( vw_pipeline_run_history[run_id] )
 
@@ -189,21 +156,13 @@ RETURN CALCULATE ( MAX ( vw_pipeline_run_history[end_ts] ),
                    vw_pipeline_run_history[run_id] = _last )
 
 Total Runs = COUNTROWS ( vw_pipeline_run_history )
-
 Failed Runs = CALCULATE ( [Total Runs], vw_pipeline_run_history[status] = "FAILED" )
-
 Run Success Rate % = DIVIDE ( [Total Runs] - [Failed Runs], [Total Runs] )
-
 Records Extracted = SUM ( vw_pipeline_run_history[records_extracted] )
-
 Records Rejected = SUM ( vw_pipeline_run_history[records_rejected] )
-
 Rejection Rate % = DIVIDE ( [Records Rejected], [Records Extracted] )
-
 Records Loaded = SUM ( vw_pipeline_run_history[records_loaded] )
-
 Failed Checks = CALCULATE ( COUNTROWS ( vw_dq_check_results ), vw_dq_check_results[check_status] = "FAIL" )
-
 Warning Checks = CALCULATE ( COUNTROWS ( vw_dq_check_results ), vw_dq_check_results[check_status] = "WARN" )
 
 DQ Pass Rate % =
@@ -215,90 +174,77 @@ DIVIDE (
 Avg Run Duration (s) = AVERAGE ( vw_pipeline_run_history[duration_seconds] )
 ```
 
-Formats: currency for revenue/profit/AOV measures (0 decimals on cards), percentage with 1 decimal
-for every `%` measure, whole number for counts.
+Formatting: currency for the money measures, percentages with one decimal place, and whole numbers
+for counts.
 
-## 6. Report pages
+## Pages
 
-Use one consistent layout: title + last refresh at the top, a row of KPI cards, two to three main
-visuals, slicer panel on the left. Sync the common slicers (Year, Region, Segment, Category) across
-the five business pages (*View > Sync slicers*).
+I'd keep the same layout on every page: title at the top, a row of KPI cards, two or three main
+charts, and slicers down the left. Sync the Year, Region, Segment and Category slicers across the
+five business pages.
 
-### Page 1 - Executive Overview
-* **KPI cards:** Total Revenue, Total Profit, Profit Margin %, Total Orders, Average Order Value,
-  Revenue YoY %, Return Rate %.
-* Line chart: Total Revenue and Total Profit by `year_month_label`.
-* Clustered bar: Total Revenue by `region`.
-* Donut: Total Revenue by `category`.
-* **Slicers:** `calendar_year`, `region`, `segment`.
+**1. Executive Overview**
+- Cards: Revenue, Profit, Margin %, Orders, AOV, Revenue YoY %, Return Rate %
+- Line chart of revenue and profit by month
+- Bar chart of revenue by region
+- Donut of revenue by category
+- Slicers: year, region, segment
 
-### Page 2 - Sales Performance
-* Line + column combo: Total Revenue (columns) and Revenue YoY % (line) by month.
-* Line chart: Revenue YTD by month with `calendar_year` as legend (year-over-year comparison).
-* Matrix: rows `calendar_year > quarter_name > month_name`; values Revenue, Revenue PY,
-  Revenue YoY %, Profit Margin %. Conditional formatting (icons) on Revenue YoY %.
-* Column chart: Total Revenue by `ship_mode`; card: Average Ship Days.
-* **Slicers:** date range (`full_date`, between), `ship_mode`, `segment`.
+**2. Sales Performance**
+- Columns for revenue with a line for YoY % by month
+- Revenue YTD by month, one line per year
+- Matrix (year > quarter > month) with Revenue, Revenue PY, YoY % and Margin %
+- Revenue by ship mode, and average ship days
+- Slicers: date range, ship mode, segment
 
-### Page 3 - Product Analysis
-* Table: Top 10 products (`product_name`, Revenue, Profit, Profit Margin %, Units Sold) with a
-  *Top N* visual-level filter on `product_name` by Total Revenue = 10.
-* Bar chart: Total Profit by `sub_category`, sorted ascending (loss makers - Tables, Bookcases,
-  Supplies - stand out in red via conditional formatting: Total Profit < 0).
-* Scatter: Average Discount % (x) vs Profit Margin % (y), details `sub_category`, size Revenue -
-  shows the discount/margin relationship found in `11_discount_impact.sql`.
-* Decomposition tree: Total Profit by category > sub_category > product_name.
-* **Slicers:** `category`, `sub_category`, `calendar_year`.
+**3. Product Analysis**
+- Top 10 products table (using a Top N filter on revenue)
+- Profit by sub-category, sorted lowest first, with negatives in red. Tables, Bookcases and
+  Supplies show up straight away.
+- Scatter of average discount against margin by sub-category; the higher the discount, the lower
+  the margin
+- Decomposition tree: profit by category > sub-category > product
+- Slicers: category, sub-category, year
 
-### Page 4 - Customer Analysis
-* KPI cards: Total Customers, Repeat Customers, Repeat Customer Rate %, Revenue per Customer.
-* Donut: Total Revenue by `segment`.
-* Table: top 15 customers by revenue (`customer_name`, `segment`, Orders, Revenue, Profit).
-* Column chart: Total Customers by `calendar_year` (active customers per year).
-* Optional: import `docs/sample_outputs/analytics/06_customer_segmentation_rfm.csv` or, better,
-  create a view from `sql/analytics/06_customer_segmentation_rfm.sql` and chart customers and
-  revenue by RFM segment.
-* **Slicers:** `segment`, `region`, `calendar_year`.
+**4. Customer Analysis**
+- Cards: Customers, Repeat Customers, Repeat Rate %, Revenue per Customer
+- Revenue by segment
+- Top 15 customers table
+- Active customers per year
+- Optionally, RFM segments (make a view from `sql/analytics/06_customer_segmentation_rfm.sql`)
+- Slicers: segment, region, year
 
-### Page 5 - Regional Analysis
-* Filled map: Total Revenue by `state` (Location data category) with tooltip Profit Margin %.
-* Matrix: `region > state > city`, Revenue, Profit, Profit Margin %, Region Revenue Share %, with
-  data bars.
-* Clustered bar: Profit Margin % by `region` (Central is the weakest, ~7.9% vs ~14.9% West).
-* Card / table: `regional_manager` with Revenue for the selected region.
-* **Slicers:** `region`, `calendar_year`, `category`.
+**5. Regional Analysis**
+- Filled map of revenue by state, with margin in the tooltip
+- Matrix of region > state > city with revenue, profit, margin and share
+- Margin by region (Central is the weakest at about 7.9%, West the best at about 14.9%)
+- Revenue per regional manager
+- Slicers: region, year, category
 
-### Page 6 - Data Quality & Pipeline Monitoring
-* KPI cards: Last Run Status, Last Run Time, Run Success Rate %, Rejection Rate %, DQ Pass Rate %.
-  Conditional colour on Last Run Status (green SUCCESS, amber SUCCESS_WITH_WARNINGS, red FAILED).
-* Table: `vw_pipeline_run_history` - run_id, start_ts, status, records_extracted,
-  records_loaded, records_updated, records_unchanged, records_rejected, duration_seconds.
-* Clustered column: records_loaded vs records_rejected by `run_id`.
-* Matrix: `vw_dq_check_results` - rows `source_name > check_name`, columns `check_status`, values
-  sum of `records_failed`; filter to the latest run with a `run_id` slicer.
-* Bar: `vw_rejection_summary` rejected_records by `rejection_reasons`.
-* **Slicers:** `run_id`, `source_name`, `severity`.
+**6. Data Quality & Pipeline Monitoring**
+- Cards: Last Run Status (coloured green / amber / red), Last Run Time, Success Rate %,
+  Rejection Rate %, DQ Pass Rate %
+- Table of the run history
+- Rows loaded vs rejected per run
+- Matrix of checks by source with status columns, filtered to one run
+- Rejected rows by reason
+- Slicers: run_id, source, severity
 
-## 7. Refresh workflow
+## Refreshing
 
-1. `python run_pipeline.py` (loads new files; safe to run repeatedly).
-2. In Power BI: `Home > Refresh`.
-3. Page 6 immediately shows the new run, its checks and any rejections.
+Run `python run_pipeline.py`, then hit Refresh in Power BI. The new run shows up on page 6.
 
-For scheduled refresh in the Power BI service you would need the on-premises data gateway
-pointing at the MySQL server; that is out of scope for this local project.
+## Checking the numbers
 
-## 8. Validating the report
+With no filters, the cards should match what the SQL gives (real data, first load):
 
-After building, compare the cards with the SQL library to verify the model:
-
-| Power BI measure (no filters) | SQL source | Value (real data, run 1) |
-|---|---|---|
-| Total Revenue | `01_kpi_overview.sql` | 2,296,919.49 |
-| Total Profit | `01_kpi_overview.sql` | 286,409.08 |
-| Profit Margin % | `01_kpi_overview.sql` | 12.47% |
-| Total Orders | `01_kpi_overview.sql` | 5,009 |
-| Total Customers | `01_kpi_overview.sql` | 793 |
-| Average Order Value | `01_kpi_overview.sql` | 458.56 |
-| Return Rate % | `01_kpi_overview.sql` | 5.91% |
-| Revenue YoY % (2018) | `03_year_over_year_growth.sql` | 20.36% |
+| Measure | Expected |
+|---|---|
+| Total Revenue | 2,296,919.49 |
+| Total Profit | 286,409.08 |
+| Profit Margin % | 12.47% |
+| Total Orders | 5,009 |
+| Total Customers | 793 |
+| Average Order Value | 458.56 |
+| Return Rate % | 5.91% |
+| Revenue YoY % for 2018 | 20.36% |
