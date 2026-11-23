@@ -1,0 +1,41 @@
+# Secrets
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data (raw data is downloaded by scripts/download_dataset.py; others are generated)
+data/raw/*
+data/processed/*
+data/rejected/*
+data/demo_increment/
+!data/**/.gitkeep
+
+# Generated outputs
+logs/*
+reports/*
+!logs/.gitkeep
+!reports/.gitkeep
+
+# Power BI working files (commit a .pbit template instead if you create one)
+*.pbix
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
